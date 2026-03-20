@@ -1,0 +1,63 @@
+name: Actualizar Dashboard de Inventario
+
+on:
+  push:
+    paths:
+      - '**.xlsx'          # Se activa al subir cualquier Excel
+      - '**.xls'
+  workflow_dispatch:       # También se puede lanzar manualmente
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+jobs:
+  update-dashboard:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repositorio
+        uses: actions/checkout@v4
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Instalar dependencias
+        run: pip install pandas openpyxl
+
+      - name: Convertir Excel → JSON
+        run: python scripts/excel_to_json.py
+
+      - name: Confirmar y subir cambios
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/inventario.json
+          git diff --staged --quiet || git commit -m "🔄 Inventario actualizado $(date +'%Y-%m-%d %H:%M')"
+          git push
+
+  deploy-pages:
+    needs: update-dashboard
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Configurar Pages
+        uses: actions/configure-pages@v4
+
+      - name: Subir artefacto
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: '.'
+
+      - name: Desplegar en GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
